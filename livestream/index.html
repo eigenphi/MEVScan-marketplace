@@ -1,0 +1,818 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MEV Live Stream</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+         background: #0f1117; color: #e2e8f0; min-height: 100vh;
+         display: flex; flex-direction: column; font-size: 13px; }
+
+  /* ── Header ── */
+  header { background: #1a1f2e; border-bottom: 1px solid #2d3748;
+           padding: 0 20px; height: 48px; display: flex; align-items: center; gap: 16px; flex-shrink: 0; }
+  header .brand { font-size: 15px; font-weight: 700; color: #fff; letter-spacing: .3px; }
+  header .sub   { font-size: 12px; color: #4a5568; }
+
+  /* ── Status bar ── */
+  .statusbar { background: #13171f; border-bottom: 1px solid #1e2435;
+               padding: 7px 20px; display: flex; align-items: center; gap: 18px;
+               flex-shrink: 0; flex-wrap: wrap; }
+  .conn { display: flex; align-items: center; gap: 7px; font-size: 12px; font-weight: 600; }
+  .dot  { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+  .dot.connected    { background: #48bb78; box-shadow: 0 0 5px #48bb7888; }
+  .dot.reconnecting { background: #f6e05e; animation: blink .9s infinite; }
+  .dot.disconnected { background: #fc8181; }
+  .dot.auth_failed  { background: #fc8181; }
+  @keyframes blink { 0%,100%{ opacity:1 } 50%{ opacity:.3 } }
+
+  .stat { font-size: 12px; color: #4a5568; }
+  .stat b { color: #718096; font-weight: 600; }
+  .sb-gap { flex: 1; }
+
+  .btn { padding: 3px 13px; border-radius: 5px; font-size: 12px; font-weight: 600;
+         cursor: pointer; border: 1px solid; transition: background .12s; }
+  .btn-pause  { border-color: #3182ce; color: #63b3ed; background: transparent; }
+  .btn-pause:hover  { background: #0d1a2e; }
+  .btn-pause.paused { border-color: #48bb78; color: #68d391; }
+  .btn-pause.paused:hover { background: #0a1f12; }
+  .btn-clear  { border-color: #2d3748; color: #718096; background: transparent; margin-left: 6px; }
+  .btn-clear:hover { background: #1a1f2e; color: #a0aec0; }
+
+  .buf-badge { display: inline-block; margin-left: 5px; background: #ed8936; color: #fff;
+               border-radius: 8px; padding: 0 5px; font-size: 10px; font-weight: 700; vertical-align: middle; }
+
+  /* ── Table ── */
+  main { flex: 1; overflow: auto; }
+  table { width: 100%; border-collapse: collapse; table-layout: fixed; }
+  col.c-time     { width: 72px; }
+  col.c-type     { width: 80px; }
+  col.c-tx       { width: 126px; }
+  col.c-block    { width: 68px; }
+  col.c-txi      { width: 52px; }
+  col.c-token    { width: 112px; }
+  col.c-from     { width: 108px; }
+  col.c-contract { width: 108px; }
+  col.c-profit   { width: 88px; }
+  col.c-cost     { width: 80px; }
+  col.c-revenue  { width: 88px; }
+
+  thead th { position: sticky; top: 0; z-index: 2;
+             background: #1a1f2e; color: #4a5568;
+             font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: .8px;
+             padding: 7px 10px; border-bottom: 1px solid #2d3748; text-align: left; white-space: nowrap; }
+  thead th.r { text-align: right; }
+
+  tbody tr { border-bottom: 1px solid #161b27; }
+  tbody tr:hover { background: #161b27; }
+  tbody tr.flash { animation: rowflash .55s ease-out; }
+  @keyframes rowflash { 0%{ background: #0d2040; } 100%{ background: transparent; } }
+
+  td { padding: 5px 10px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; vertical-align: middle; }
+  td.r { text-align: right; }
+  .mono { font-family: "SF Mono","Fira Code",monospace; font-size: 12px; }
+  a.link { color: #63b3ed; text-decoration: none; }
+  a.link:hover { text-decoration: underline; }
+
+  .pos { color: #68d391; }
+  .neg { color: #fc8181; }
+  .neu { color: #718096; }
+
+  .badge { display: inline-block; padding: 1px 7px; border-radius: 9px;
+           font-size: 11px; font-weight: 700; letter-spacing: .3px; }
+  .b-arb { background: #0d1a2e; color: #63b3ed; border: 1px solid #1a3a6e; }
+  .b-sw  { background: #2d1800; color: #f6ad55; border: 1px solid #744210; }
+  .b-liq { background: #2d0a0a; color: #fc8181; border: 1px solid #7b2b2b; }
+  .b-jit { background: #1e0d2e; color: #b794f4; border: 1px solid #553c8b; }
+  .b-unk   { background: #1a1f2e; color: #718096; border: 1px solid #2d3748; }
+  .b-sw-f  { background: #2d0a0a; color: #fc8181; border: 1px solid #7b2b2b; }
+  .b-sw-v  { background: #2d1800; color: #f6ad55; border: 1px solid #744210; }
+  .b-sw-b  { background: #2d0a0a; color: #fc8181; border: 1px solid #7b2b2b; }
+  .b-jit-m { background: #1e0d2e; color: #b794f4; border: 1px solid #553c8b; }
+  .b-jit-s { background: #0f1f0a; color: #9ae06a; border: 1px solid #2d5a14; }
+  .b-jit-b { background: #1e0d2e; color: #b794f4; border: 1px solid #553c8b; }
+
+  .empty td { text-align: center; color: #2d3748; padding: 80px; font-size: 14px; }
+
+  /* sandwich / JIT group rows */
+  .sw-group-top, .sw-group-mid, .sw-group-bot,
+  .jit-group-top, .jit-group-mid, .jit-group-bot
+    { border: none !important; }
+  .sw-group-top td, .sw-group-mid td, .sw-group-bot td,
+  .jit-group-top td, .jit-group-mid td, .jit-group-bot td
+    { border-top: none !important; border-bottom: none !important; }
+  /* group top border */
+  .sw-group-top td, .jit-group-top td
+    { border-top: 1px solid #4a5568 !important; }
+  /* group bottom border: bot-row plain td + top-row rowspan td (Time/Block/Profit etc.) */
+  .sw-group-bot td, .jit-group-bot td,
+  .sw-group-top td[rowspan], .jit-group-top td[rowspan]
+    { border-bottom: 1px solid #4a5568 !important; }
+  .sw-group-top:hover td, .sw-group-mid:hover td, .sw-group-bot:hover td,
+  .jit-group-top:hover td, .jit-group-mid:hover td, .jit-group-bot:hover td { background: #161b27; }
+
+  /* tx/addr multi-value chips */
+  .tx-chips { display: flex; flex-wrap: wrap; gap: 3px; align-items: center; }
+  .tx-chip  { display: inline-block; padding: 1px 5px; border-radius: 4px;
+              font-size: 11px; font-family: "SF Mono","Fira Code",monospace;
+              background: #1a1f2e; border: 1px solid #2d3748;
+              color: #63b3ed; text-decoration: none; white-space: nowrap; }
+  .tx-chip:hover { background: #0d1a2e; text-decoration: underline; }
+  .tx-chip-more { font-size: 11px; color: #718096; padding: 0 2px; }
+
+  /* token icon stack */
+  .t-icons { display: flex; align-items: center; }
+  .t-icon  { width: 18px; height: 18px; border-radius: 50%; border: 1px solid #2d3748;
+             background: #1a1f2e; overflow: hidden; flex-shrink: 0; margin-left: -5px; }
+  .t-icons .t-icon:first-child { margin-left: 0; }
+  .t-icon img { width: 100%; height: 100%; display: block; }
+  .t-icon-fb { display: flex; align-items: center; justify-content: center;
+               font-size: 9px; font-weight: 700; color: #fff; }
+
+  footer { text-align: center; font-size: 11px; color: #2d3748; padding: 10px; flex-shrink: 0; }
+
+  /* ── Filter bar ── */
+  .filterbar { background: #0f1117; border-bottom: 1px solid #1e2435;
+               padding: 6px 20px; display: flex; align-items: center; gap: 10px;
+               flex-shrink: 0; flex-wrap: wrap; min-height: 38px; }
+  .filterbar label { font-size: 11px; font-weight: 700; color: #4a5568;
+                     text-transform: uppercase; letter-spacing: .08em; white-space: nowrap; }
+  .filter-input { background: #1a1f2e; border: 1px solid #2d3748; border-radius: 5px;
+                  color: #e2e8f0; font-size: 12px; font-family: "SF Mono","Fira Code",monospace;
+                  padding: 3px 10px; width: 300px; outline: none; }
+  .filter-input:focus { border-color: #4a90e2; }
+  .filter-input::placeholder { color: #4a5568; }
+  .btn-add { border-color: #2d4a6a; color: #63b3ed; background: transparent; }
+  .btn-add:hover { background: #0d1a2e; }
+  .filter-chips { display: flex; flex-wrap: wrap; gap: 5px; align-items: center; }
+  .filter-chip { display: inline-flex; align-items: center; gap: 5px;
+                 background: #0d1a2e; border: 1px solid #1a3a6e; border-radius: 5px;
+                 padding: 2px 8px; font-size: 11px; font-family: "SF Mono","Fira Code",monospace;
+                 color: #63b3ed; }
+  .filter-chip button { background: none; border: none; cursor: pointer; color: #4a5568;
+                        font-size: 13px; line-height: 1; padding: 0; margin: 0; }
+  .filter-chip button:hover { color: #fc8181; }
+  .filter-active-badge { font-size: 11px; color: #f6ad55; font-weight: 600; white-space: nowrap; }
+</style>
+</head>
+<body>
+
+<header>
+  <span class="brand">MEV Live Stream</span>
+  <span class="sub">powered by MEVScan</span>
+</header>
+
+<div class="statusbar">
+  <div class="conn">
+    <div class="dot disconnected" id="dot"></div>
+    <span id="conn-label">Connecting…</span>
+  </div>
+  <div class="stat">Received <b id="s-count">0</b></div>
+  <div class="stat">Last updated <b id="s-time">—</b></div>
+  <div class="sb-gap"></div>
+  <button class="btn btn-clear" onclick="clearAll()">Clear</button>
+  <button class="btn btn-pause" id="pbtn" onclick="togglePause()">Pause</button>
+</div>
+
+<div class="filterbar">
+  <label>Filter</label>
+  <input class="filter-input" id="filter-input" type="text" placeholder="From / Contract address (0x…)" spellcheck="false"
+         onkeydown="if(event.key==='Enter')addFilter()">
+  <button class="btn btn-add" onclick="addFilter()">Add</button>
+  <div class="filter-chips" id="filter-chips"></div>
+  <span class="filter-active-badge" id="filter-badge" style="display:none"></span>
+</div>
+
+<main>
+  <table>
+    <colgroup>
+      <col class="c-time"><col class="c-type"><col class="c-tx"><col class="c-block">
+      <col class="c-txi"><col class="c-token"><col class="c-from"><col class="c-contract">
+      <col class="c-profit"><col class="c-cost"><col class="c-revenue">
+    </colgroup>
+    <thead>
+      <tr>
+        <th>Time</th><th>Type</th><th>Transaction</th><th>Block</th>
+        <th>TxIdx</th><th>Token</th><th>From</th><th>Contract</th>
+        <th class="r">Profit</th><th class="r">Cost</th><th class="r">Revenue</th>
+      </tr>
+    </thead>
+    <tbody id="tbody">
+      <tr class="empty"><td colspan="11">Waiting for data…</td></tr>
+    </tbody>
+  </table>
+</main>
+
+<footer>EigenPhi · MEVScan</footer>
+
+<script>
+'use strict';
+
+const MAX_ROWS      = 500;
+const ETHERSCAN_TX  = 'https://etherscan.io/tx/';
+const ETHERSCAN_A   = 'https://etherscan.io/address/';
+
+const tbody   = document.getElementById('tbody');
+let paused    = false;
+let buf       = [];   // buffer during pause
+let count     = 0;
+let ws        = null;
+let wsRetry   = 0;
+let wsTimer   = null;
+
+// ── Address filter ────────────────────────────────────────────────────────────
+let filterAddrs = new Set(); // lowercase addresses
+
+function addFilter() {
+  const input = document.getElementById('filter-input');
+  const raw = input.value.trim();
+  if (!raw) return;
+  filterAddrs.add(raw.toLowerCase());
+  input.value = '';
+  renderFilterChips();
+}
+
+function removeFilter(addr) {
+  filterAddrs.delete(addr);
+  renderFilterChips();
+}
+
+function renderFilterChips() {
+  const chips = document.getElementById('filter-chips');
+  const badge = document.getElementById('filter-badge');
+  chips.innerHTML = '';
+  for (const addr of filterAddrs) {
+    const chip = document.createElement('span');
+    chip.className = 'filter-chip';
+    const label = document.createTextNode(addr.slice(0, 8) + '…' + addr.slice(-4));
+    const btn = document.createElement('button');
+    btn.title = 'Remove';
+    btn.textContent = '×';
+    btn.addEventListener('click', () => removeFilter(addr));
+    chip.appendChild(label);
+    chip.appendChild(btn);
+    chips.appendChild(chip);
+  }
+  if (filterAddrs.size > 0) {
+    badge.textContent = 'Filtering ' + filterAddrs.size + ' address' + (filterAddrs.size > 1 ? 'es' : '');
+    badge.style.display = '';
+  } else {
+    badge.style.display = 'none';
+  }
+}
+
+// Check whether a msg matches the active filter (from or to/contract of any tx)
+function _msgMatchesFilter(msg) {
+  if (filterAddrs.size === 0) return true;
+  const data = msg.data || {};
+  const rel  = data.mevTxRelation || {};
+  // collect from/to across all tx roles
+  const allTxs = [
+    ...(rel.primary  || []),
+    ...(rel.frontrun || []),
+    ...(rel.victim   || []),
+    ...(rel.backrun  || []),
+    ...(rel.mint     || []),
+    ...(rel.swap     || []),
+    ...(rel.burn     || []),
+  ];
+  for (const tx of allTxs) {
+    if (tx.from && filterAddrs.has(tx.from.toLowerCase())) return true;
+    if (tx.to   && filterAddrs.has(tx.to.toLowerCase()))   return true;
+  }
+  return false;
+}
+
+// WebSocket URL follows the current page host
+const WS_URL = 'ws://' + window.location.host + '/ws';
+
+// ── Connect ───────────────────────────────────────────────────────────────────
+
+function connect() {
+  setStatus('reconnecting', 'Connecting…');
+  ws = new WebSocket(WS_URL);
+
+  ws.onopen = () => {
+    wsRetry = 0;
+    // connection status is updated by server-pushed status events
+  };
+
+  ws.onmessage = (e) => {
+    let msg;
+    try { msg = JSON.parse(e.data); } catch (_) { return; }
+
+    if (msg._type === 'status') {
+      handleStatus(msg.state);
+      return;
+    }
+    if (msg._type === 'mev') {
+      if (paused) {
+        buf.push(msg);
+        updatePauseBtn();
+      } else {
+        addRow(msg);
+      }
+    }
+  };
+
+  ws.onerror = () => {};  // onclose fires right after
+
+  ws.onclose = () => {
+    setStatus('disconnected', 'Disconnected');
+    const delay = Math.min(1500 * Math.pow(1.6, wsRetry), 20000);
+    wsRetry++;
+    clearTimeout(wsTimer);
+    wsTimer = setTimeout(connect, delay);
+  };
+}
+
+function handleStatus(state) {
+  const labels = {
+    connected:    'Connected',
+    reconnecting: 'Reconnecting…',
+    disconnected: 'Disconnected',
+    auth_failed:  'Auth failed — check MEVSCAN_TOKEN in .env',
+  };
+  setStatus(state, labels[state] || state);
+}
+
+// ── Row rendering ────────────────────────────────────────────────────────────
+
+function addRow(msg) {
+  count++;
+  document.getElementById('s-count').textContent = count;
+  document.getElementById('s-time').textContent  = nowStr();
+
+  if (!_msgMatchesFilter(msg)) return;
+
+  const mevType = (msg.type || '').toUpperCase();
+  const data    = msg.data || {};
+
+  if (mevType === 'SANDWICH' || mevType === 'JIT') {
+    console.log('[MEVScan ' + mevType + ']', JSON.stringify(msg));
+  }
+
+  const ph = tbody.querySelector('.empty');
+  if (ph) ph.remove();
+
+  if (mevType === 'SANDWICH') {
+    addSandwichRows(msg, data);
+  } else if (mevType === 'JIT') {
+    addJitRows(msg, data);
+  } else {
+    addSimpleRow(msg, data, mevType);
+  }
+}
+
+// sort by txIndex ascending
+function _sortByTxi(txs) {
+  return (txs || []).slice().sort((a, b) => (a.txIndex ?? 0) - (b.txIndex ?? 0));
+}
+
+function _txiRange(txs) {
+  if (!txs || !txs.length) return '';
+  const idxs = txs.map(t => t.txIndex ?? 0);
+  const mn = Math.min(...idxs), mx = Math.max(...idxs);
+  return mn === mx ? String(mn) : mn + '~' + mx;
+}
+
+// chip list of tx links (up to 5, then ellipsis)
+function txChips(txs) {
+  if (!txs || !txs.length) return '—';
+  const sorted = _sortByTxi(txs);
+  const hashes = sorted.map(t => t.txHash || '').filter(h => h);
+  if (!hashes.length) return '—';
+  // single: no border, same as txLink
+  if (hashes.length === 1) return txLink(hashes[0]);
+  // multiple: icon only, no text
+  const display = hashes.slice(0, 5);
+  const more = hashes.length > 5;
+  let html = '<div class="tx-chips">';
+  for (const h of display) {
+    html += '<a href="' + ETHERSCAN_TX + esc(h) + '" target="_blank" rel="noopener" title="' + esc(h) + '">'
+          + _blockieImg(h, 16) + '</a>';
+  }
+  if (more) html += '<span class="tx-chip-more">…</span>';
+  html += '</div>';
+  return html;
+}
+
+// chip list of addresses (preserve duplicates)
+function addrChips(txs, field) {
+  if (!txs || !txs.length) return '—';
+  const sorted = _sortByTxi(txs);
+  const addrs = sorted.map(t => t[field] || '').filter(a => a);
+  if (!addrs.length) return '—';
+  // single: no border, same as addrLink
+  if (addrs.length === 1) return addrLink(addrs[0]);
+  // multiple: icon only, no text
+  const display = addrs.slice(0, 5);
+  const more = addrs.length > 5;
+  let html = '<div class="tx-chips">';
+  for (const a of display) {
+    html += '<a href="' + ETHERSCAN_A + esc(a) + '" target="_blank" rel="noopener" title="' + esc(a) + '">'
+          + _blockieImg(a, 16) + '</a>';
+  }
+  if (more) html += '<span class="tx-chip-more">…</span>';
+  html += '</div>';
+  return html;
+}
+
+// collect all token icons from a set of transactions
+function txsTokenIcons(txs) {
+  const all = [];
+  for (const t of (txs || [])) {
+    for (const tf of (t.transfers || [])) all.push(tf);
+  }
+  return tokenIcons(all);
+}
+
+function addSandwichRows(msg, data) {
+  const rel     = data.mevTxRelation || {};
+  const fronts  = _sortByTxi(rel.frontrun  || []);
+  const victims = _sortByTxi(rel.victim    || []);
+  const backs   = _sortByTxi(rel.backrun   || []);
+  const pnlSum  = (data.pnl || {}).summary || {};
+  const blockNum = msg.blockNumber || data.blockNumber || '';
+
+  const profit  = pnlSum.profitUsd  ?? null;
+  const cost    = pnlSum.costUsd    ?? null;
+  const revenue = pnlSum.revenueUsd ?? null;
+
+  // sort key: txIndex of the first frontrun tx
+  const sortTxi = fronts.length ? (fronts[0].txIndex ?? -1) : -1;
+
+  const timeStr = nowStr();
+
+  // block string — block number only (no txIndex)
+  function bstr() {
+    return blockNum || '—';
+  }
+
+  // txIndex string for a role's transactions
+  function txiStr(txs) {
+    return _txiRange(txs) || '—';
+  }
+
+  // generate three rows HTML
+  const rows = [
+    { role: fronts,  cls: 'sw-group-top', badge: '<span class="badge b-sw-f">Sandwich-FrontRun</span>' },
+    { role: victims, cls: 'sw-group-mid', badge: '<span class="badge b-sw-v">Sandwich-Victim</span>' },
+    { role: backs,   cls: 'sw-group-bot', badge: '<span class="badge b-sw-b">Sandwich-BackRun</span>' },
+  ];
+
+  const trEls = rows.map(({ role, cls, badge: badgeHtml }, i) => {
+    const tr = document.createElement('tr');
+    tr.className = cls + ' flash';
+    tr.dataset.block = blockNum || 0;
+    tr.dataset.txi   = sortTxi;
+    tr.dataset.swGroup = 'yes';
+
+    const timeCell = i === 0
+      ? '<td class="mono" rowspan="3">' + timeStr + '</td>'
+      : '';
+    const blockCell = i === 0
+      ? '<td class="mono" rowspan="3">' + bstr() + '</td>'
+      : '';
+
+    tr.innerHTML =
+      timeCell +
+      '<td>' + badgeHtml + '</td>' +
+      '<td class="mono">'  + txChips(role)              + '</td>' +
+      blockCell +
+      '<td class="mono">'  + txiStr(role)               + '</td>' +
+      '<td>'               + txsTokenIcons(role)         + '</td>' +
+      '<td class="mono">'  + addrChips(role, 'from')    + '</td>' +
+      '<td class="mono">'  + addrChips(role, 'to')      + '</td>' +
+      (i === 0
+        ? '<td class="r mono ' + usdCls(profit)  + '" rowspan="3">' + fmtUsd(profit)  + '</td>'
+          + '<td class="r mono ' + usdCls(cost !== null ? -cost : null) + '" rowspan="3">' + fmtUsd(cost) + '</td>'
+          + '<td class="r mono ' + usdCls(revenue) + '" rowspan="3">' + fmtUsd(revenue) + '</td>'
+        : '');
+
+    return tr;
+  });
+
+  // find insert position (sorted by frontrun first txIndex)
+  const insertBefore = _findInsertPos(blockNum, sortTxi);
+  for (const tr of trEls) {
+    tbody.insertBefore(tr, insertBefore);
+  }
+
+  // trim excess rows (each sandwich occupies 3 rows)
+  while (tbody.rows.length > MAX_ROWS) tbody.deleteRow(tbody.rows.length - 1);
+}
+
+function addJitRows(msg, data) {
+  const rel      = data.mevTxRelation || {};
+  const mints    = _sortByTxi(rel.mint  || []);
+  const swaps    = _sortByTxi(rel.swap  || []);
+  const burns    = _sortByTxi(rel.burn  || []);
+  const pnlSum   = (data.pnl || {}).summary || {};
+  const blockNum = msg.blockNumber || data.blockNumber || '';
+
+  const profit  = pnlSum.profitUsd  ?? null;
+  const cost    = pnlSum.costUsd    ?? null;
+  const revenue = pnlSum.revenueUsd ?? null;
+
+  const sortTxi = mints.length ? (mints[0].txIndex ?? -1) : -1;
+  const timeStr = nowStr();
+
+  function bstr() { return blockNum || '—'; }
+  function txiStr(txs) { return _txiRange(txs) || '—'; }
+
+  const rows = [
+    { role: mints, cls: 'jit-group-top', badge: '<span class="badge b-jit-m">JIT-Mint</span>' },
+    { role: swaps, cls: 'jit-group-mid', badge: '<span class="badge b-jit-s">JIT-Swap</span>' },
+    { role: burns, cls: 'jit-group-bot', badge: '<span class="badge b-jit-b">JIT-Burn</span>' },
+  ];
+
+  const trEls = rows.map(({ role, cls, badge: badgeHtml }, i) => {
+    const tr = document.createElement('tr');
+    tr.className = cls + ' flash';
+    tr.dataset.block   = blockNum || 0;
+    tr.dataset.txi     = sortTxi;
+    tr.dataset.swGroup = 'yes';
+
+    const timeCell = i === 0
+      ? '<td class="mono" rowspan="3">' + timeStr + '</td>'
+      : '';
+    const blockCell = i === 0
+      ? '<td class="mono" rowspan="3">' + bstr() + '</td>'
+      : '';
+
+    tr.innerHTML =
+      timeCell +
+      '<td>' + badgeHtml + '</td>' +
+      '<td class="mono">' + txChips(role)           + '</td>' +
+      blockCell +
+      '<td class="mono">' + txiStr(role)            + '</td>' +
+      '<td>'              + txsTokenIcons(role)      + '</td>' +
+      '<td class="mono">' + addrChips(role, 'from') + '</td>' +
+      '<td class="mono">' + addrChips(role, 'to')   + '</td>' +
+      (i === 0
+        ? '<td class="r mono ' + usdCls(profit)  + '" rowspan="3">' + fmtUsd(profit)  + '</td>'
+          + '<td class="r mono ' + usdCls(cost !== null ? -cost : null) + '" rowspan="3">' + fmtUsd(cost) + '</td>'
+          + '<td class="r mono ' + usdCls(revenue) + '" rowspan="3">' + fmtUsd(revenue) + '</td>'
+        : '');
+
+    return tr;
+  });
+
+  const insertBefore = _findInsertPos(blockNum, sortTxi);
+  for (const tr of trEls) tbody.insertBefore(tr, insertBefore);
+  while (tbody.rows.length > MAX_ROWS) tbody.deleteRow(tbody.rows.length - 1);
+}
+
+function addSimpleRow(msg, data, mevType) {
+  const rel      = data.mevTxRelation || {};
+  const primary  = (rel.primary || [])[0] || {};
+  const pnlSum   = (data.pnl || {}).summary || {};
+
+  const txHash   = primary.txHash || '';
+  const from     = primary.from   || '';
+  const to       = primary.to     || '';
+  const blockNum = msg.blockNumber || data.blockNumber || '';
+  const txIndex  = primary.txIndex ?? '';
+  const blockStr = blockNum || '—';
+  const txiStr   = txIndex !== '' ? String(txIndex) : '—';
+  const profit   = pnlSum.profitUsd  ?? null;
+  const cost     = pnlSum.costUsd    ?? null;
+  const revenue  = pnlSum.revenueUsd ?? null;
+
+  const tr = document.createElement('tr');
+  tr.className = 'flash';
+  tr.dataset.block = blockNum || 0;
+  tr.dataset.txi   = txIndex === '' ? -1 : txIndex;
+
+  tr.innerHTML =
+    td(nowStr(), 'mono') +
+    td(badge(mevType)) +
+    td(txLink(txHash), 'mono') +
+    td(blockStr, 'mono') +
+    td(txiStr, 'mono') +
+    td(tokenIcons(primary.transfers || [])) +
+    td(addrLink(from), 'mono') +
+    td(addrLink(to),   'mono') +
+    tdr(fmtUsd(profit),  usdCls(profit)) +
+    tdr(fmtUsd(cost),    usdCls(cost !== null ? -cost : null)) +
+    tdr(fmtUsd(revenue), usdCls(revenue));
+
+  const insertBefore = _findInsertPos(blockNum, txIndex === '' ? -1 : +txIndex);
+  tbody.insertBefore(tr, insertBefore);
+  while (tbody.rows.length > MAX_ROWS) tbody.deleteRow(tbody.rows.length - 1);
+}
+
+function _findInsertPos(blockNum, txi) {
+  const rows = tbody.rows;
+  const nb = +(blockNum || 0), nt = +txi;
+  for (let i = 0; i < rows.length; i++) {
+    const r = rows[i];
+    if (r.classList.contains('empty')) break;
+    // skip mid/bot rows of groups to avoid inserting inside a group
+    if (r.dataset.swGroup === 'yes' &&
+        !r.classList.contains('sw-group-top') &&
+        !r.classList.contains('jit-group-top')) continue;
+    const rb = +r.dataset.block, rt = +r.dataset.txi;
+    if (nb > rb || (nb === rb && nt > rt)) return r;
+  }
+  return null;
+}
+
+// ── Pause / Resume ────────────────────────────────────────────────────────────
+
+function togglePause() {
+  paused = !paused;
+  if (!paused && buf.length) {
+    for (let i = 0; i < buf.length; i++) addRow(buf[i]);
+    buf = [];
+  }
+  updatePauseBtn();
+}
+
+function updatePauseBtn() {
+  const btn = document.getElementById('pbtn');
+  if (paused) {
+    btn.className = 'btn btn-pause paused';
+    btn.innerHTML = 'Resume' + (buf.length ? '<span class="buf-badge">' + buf.length + '</span>' : '');
+  } else {
+    btn.className = 'btn btn-pause';
+    btn.textContent = 'Pause';
+  }
+}
+
+function clearAll() {
+  tbody.innerHTML = '<tr class="empty"><td colspan="11">Cleared — waiting for new events…</td></tr>';
+  buf = []; count = 0;
+  document.getElementById('s-count').textContent = '0';
+  updatePauseBtn();
+}
+
+// ── Utilities ─────────────────────────────────────────────────────────────────
+
+function setStatus(state, label) {
+  document.getElementById('dot').className = 'dot ' + state;
+  document.getElementById('conn-label').textContent = label;
+}
+
+function nowStr() {
+  return new Date().toTimeString().slice(0, 8);
+}
+
+function esc(s) {
+  return (s || '—')
+    .replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;')
+    .replace(/"/g,'&quot;');
+}
+
+function shorten(s, head, tail) {
+  if (!s) return '—';
+  return s.length > head + tail + 1 ? s.slice(0, head) + '…' + s.slice(-tail) : s;
+}
+
+// ── Blockies (inline, derived from ethereum/blockies) ────────────────────────
+function _blockieDataUrl(addr, size) {
+  size = size || 8;
+  const seed = (addr || '').toLowerCase();
+  // MWC1616 PRNG seeded from string
+  let s0 = 0, s1 = 0, s2 = 0, c = 1;
+  function seedRand(str) {
+    for (let i = 0; i < str.length; i++) {
+      s0 = s0 ^ str.charCodeAt(i); s0 += 0xe120049a; s0 = (s0<<8)|(s0>>>24);
+      s1 = s1 ^ str.charCodeAt(i); s1 += 0x89572537; s1 = (s1<<8)|(s1>>>24);
+      s2 = s2 ^ str.charCodeAt(i); s2 += 0x59d2f0ea; s2 = (s2<<8)|(s2>>>24);
+    }
+  }
+  function rand() {
+    const t = s0 ^ (s0<<11); s0=s1; s1=s2; s2=c;
+    c = s2^(s2>>>19)^(t^(t>>>8));
+    return (c>>>0) / 0x100000000;
+  }
+  seedRand(seed);
+  function hsl2rgb(h,s,l) {
+    const q = l<0.5?l*(1+s):l+s-l*s, p=2*l-q;
+    function hue(t){ if(t<0)t+=1; if(t>1)t-=1;
+      if(t<1/6)return p+(q-p)*6*t;
+      if(t<1/2)return q;
+      if(t<2/3)return p+(q-p)*(2/3-t)*6;
+      return p; }
+    return [hue(h+1/3),hue(h),hue(h-1/3)].map(v=>Math.round(v*255));
+  }
+  const color    = hsl2rgb(rand(), rand()*0.7+0.4, (rand()+rand()+rand()+rand())*0.25);
+  const bgColor  = hsl2rgb(rand(), rand()*0.7+0.4, (rand()+rand()+rand()+rand())*0.25);
+  const spotColor= hsl2rgb(rand(), rand()*0.7+0.4, (rand()+rand()+rand()+rand())*0.25);
+  // generate symmetric pixel grid (left half mirrored)
+  const half = Math.ceil(size/2);
+  const grid = [];
+  for (let i = 0; i < size*half; i++) grid.push(rand() > 0.5 ? 1 : rand() > 0.5 ? 2 : 0);
+  const px = size*size;
+  const imgData = new Uint8ClampedArray(px*4);
+  for (let y = 0; y < size; y++) {
+    for (let x = 0; x < size; x++) {
+      const xi = x < half ? x : size-1-x;
+      const v  = grid[y*half + xi];
+      const rgb = v===0 ? bgColor : v===1 ? color : spotColor;
+      const idx = (y*size+x)*4;
+      imgData[idx]=rgb[0]; imgData[idx+1]=rgb[1]; imgData[idx+2]=rgb[2]; imgData[idx+3]=255;
+    }
+  }
+  const canvas = document.createElement('canvas');
+  canvas.width = canvas.height = size;
+  canvas.getContext('2d').putImageData(new ImageData(imgData,size,size),0,0);
+  return canvas.toDataURL();
+}
+
+function _blockieImg(addr, px) {
+  px = px || 16;
+  return '<img src="' + _blockieDataUrl(addr, 8) + '" width="' + px + '" height="' + px + '" '
+       + 'style="border-radius:3px;vertical-align:middle;margin-right:4px;image-rendering:pixelated" '
+       + 'alt="">';
+}
+
+function txLink(hash) {
+  if (!hash) return '—';
+  return '<a class="link" href="' + ETHERSCAN_TX + esc(hash) + '" target="_blank" rel="noopener" style="display:inline-flex;align-items:center;gap:4px">'
+       + _blockieImg(hash) + shorten(hash, 6, 4) + '</a>';
+}
+
+function addrLink(addr) {
+  if (!addr) return '—';
+  return '<a class="link" href="' + ETHERSCAN_A + esc(addr) + '" target="_blank" rel="noopener" style="display:inline-flex;align-items:center;gap:4px">'
+       + _blockieImg(addr) + shorten(addr, 6, 4) + '</a>';
+}
+
+function fmtUsd(val, negate) {
+  if (val === null || val === undefined) return '—';
+  const n = negate ? -val : +val;
+  if (Math.abs(n) < 0.005) return '$0';
+  return (n >= 0 ? '+$' : '-$') + Math.abs(n).toFixed(2);
+}
+
+function usdCls(val) {
+  if (val === null || val === undefined) return 'neu';
+  return val > 0.005 ? 'pos' : val < -0.005 ? 'neg' : 'neu';
+}
+
+function td(content, cls) {
+  return '<td' + (cls ? ' class="' + cls + '"' : '') + '>' + content + '</td>';
+}
+function tdr(content, colorCls) {
+  return '<td class="r mono ' + (colorCls||'neu') + '">' + content + '</td>';
+}
+
+function badge(t) {
+  const map = { ARBITRAGE:['Arbitrage','b-arb'], SANDWICH:['Sandwich','b-sw'],
+                LIQUIDATION:['Liquidation','b-liq'], JIT:['JIT Liquidity','b-jit'] };
+  const [label, cls] = map[t] || [t||'?','b-unk'];
+  return '<span class="badge ' + cls + '">' + label + '</span>';
+}
+function _addrColor(addr) {
+  const hex = (addr || '').replace(/^0x/i, '').padEnd(40, '0');
+  let h = 0;
+  for (let i = 0; i < 20; i++) h = (h * 31 + parseInt(hex.slice(i * 2, i * 2 + 2), 16)) & 0xffffff;
+  const hue = h % 360;
+  const sat = 55 + parseInt(hex.slice(20, 22), 16) % 25;
+  const lit = 34 + parseInt(hex.slice(22, 24), 16) % 14;
+  return 'hsl(' + hue + ',' + sat + '%,' + lit + '%)';
+}
+
+function _tikFb(img) {
+  const wrap = img.parentNode;
+  const addr = wrap.title || '';
+  const label = addr.replace(/^0x/i, '').slice(0, 2).toUpperCase();
+  wrap.innerHTML = '<span style="font-size:7px;font-weight:800;color:#fff;pointer-events:none">' + label + '</span>';
+  wrap.style.background = _addrColor(addr);
+  wrap.classList.add('t-icon-fb');
+}
+
+function tokenIcons(transfers) {
+  if (!transfers || !transfers.length) return '<span class="neu">—</span>';
+  const seen = new Set();
+  const tokens = [];
+  for (const t of transfers) {
+    const id = (t.tokenId || '').toLowerCase();
+    if (id && !seen.has(id)) { seen.add(id); tokens.push(id); }
+  }
+  if (!tokens.length) return '<span class="neu">—</span>';
+  tokens.sort();
+  const hasMore = tokens.length > 5;
+  const display = tokens.slice(0, 5);
+  const BASE = 'https://tokens.1inch.io/';
+  let html = '<div class="t-icons">';
+  for (const addr of display) {
+    html += '<div class="t-icon" title="' + esc(addr) + '">'
+          + '<img src="' + BASE + addr + '.png" alt="" onerror="_tikFb(this)">'
+          + '</div>';
+  }
+  if (hasMore) html += '<div class="t-icon t-icon-fb" style="background:#2d3748;font-size:10px">…</div>';
+  html += '</div>';
+  return html;
+}
+
+// ── Boot ─────────────────────────────────────────────────────────────────────
+connect();
+</script>
+</body>
+</html>

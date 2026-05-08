@@ -1,0 +1,432 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MEV Report — AI Analysis</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+         background: #0f1117; color: #e2e8f0; min-height: 100vh;
+         display: flex; flex-direction: column; font-size: 13px; }
+
+  /* ── Header ── */
+  header { background: #1a1f2e; border-bottom: 1px solid #2d3748;
+           padding: 0 24px; height: 48px; display: flex; align-items: center; gap: 14px; flex-shrink: 0; }
+  .brand { font-size: 15px; font-weight: 700; color: #fff; }
+  .brand-sub { font-size: 12px; color: #4a5568; }
+
+  /* ── LLM Config Bar ── */
+  .config-bar { background: #13171f; border-bottom: 1px solid #1e2435;
+                padding: 10px 24px; display: flex; align-items: center; gap: 10px; flex-wrap: wrap; flex-shrink: 0; }
+  .config-label { font-size: 11px; font-weight: 700; color: #4a5568;
+                  text-transform: uppercase; letter-spacing: .6px; white-space: nowrap; }
+
+  /* provider tabs */
+  .provider-tabs { display: flex; gap: 4px; }
+  .ptab { padding: 5px 14px; border-radius: 5px; font-size: 12px; font-weight: 600;
+          cursor: pointer; border: 1px solid #2d3748; color: #718096;
+          background: transparent; transition: all .12s; white-space: nowrap; }
+  .ptab:hover { border-color: #4a5568; color: #a0aec0; }
+  .ptab.active { border-color: #553c9a; color: #d6bcfa; background: #1a1230; }
+  .ptab[data-p="claude"].active  { border-color: #d97706; color: #fbbf24; background: #1a1500; }
+  .ptab[data-p="gpt"].active     { border-color: #10b981; color: #34d399; background: #001a0f; }
+  .ptab[data-p="gemini"].active  { border-color: #3b82f6; color: #60a5fa; background: #001028; }
+  .ptab[data-p="deepseek"].active{ border-color: #8b5cf6; color: #c4b5fd; background: #0d0a1a; }
+  .ptab[data-p="qwen"].active    { border-color: #ef4444; color: #fca5a5; background: #1a0505; }
+
+  .config-sep { width: 1px; height: 20px; background: #1e2435; flex-shrink: 0; }
+
+  .cfg-input { background: #1a1f2e; border: 1px solid #2d3748; border-radius: 5px;
+               color: #e2e8f0; padding: 5px 10px; font-size: 12px; outline: none;
+               transition: border-color .15s; }
+  .cfg-input:focus { border-color: #553c9a; }
+  .cfg-input::placeholder { color: #2d3748; }
+  .inp-key   { width: 260px; font-family: "SF Mono", monospace; }
+  .inp-model { width: 180px; font-family: "SF Mono", monospace; }
+
+  /* ── Query Bar ── */
+  .query-bar { background: #0f1117; border-bottom: 1px solid #1e2435;
+               padding: 10px 24px; display: flex; align-items: center; gap: 8px; flex-shrink: 0; }
+  .inp-hash { flex: 1; background: #1a1f2e; border: 1px solid #2d3748; border-radius: 5px;
+              color: #e2e8f0; padding: 7px 12px; font-size: 12px; font-family: "SF Mono", monospace;
+              outline: none; transition: border-color .15s; }
+  .inp-hash:focus { border-color: #553c9a; }
+  .inp-hash::placeholder { color: #2d3748; }
+  .btn-run { padding: 7px 22px; border-radius: 5px; font-size: 13px; font-weight: 600;
+             cursor: pointer; border: none; background: #553c9a; color: #fff;
+             transition: background .12s; white-space: nowrap; }
+  .btn-run:hover:not(:disabled) { background: #6b46c1; }
+  .btn-run:disabled { background: #2d3748; color: #4a5568; cursor: not-allowed; }
+
+  .examples { padding: 6px 24px 8px; display: flex; align-items: center; gap: 8px;
+              font-size: 11px; color: #2d3748; flex-shrink: 0; }
+  .ex-link { color: #3d2d6e; cursor: pointer; font-family: "SF Mono", monospace;
+             font-size: 11px; text-decoration: underline; }
+  .ex-link:hover { color: #6b46c1; }
+
+  /* ── Main layout ── */
+  main { flex: 1; display: grid; grid-template-columns: 360px 1fr; min-height: 0; overflow: hidden; }
+
+  /* ── Left panel ── */
+  .panel-left { border-right: 1px solid #1e2435; overflow-y: auto; display: flex; flex-direction: column; }
+  .panel-title { padding: 10px 16px; font-size: 11px; font-weight: 700; color: #4a5568;
+                 text-transform: uppercase; letter-spacing: .8px; border-bottom: 1px solid #1e2435;
+                 flex-shrink: 0; background: #0f1117; position: sticky; top: 0; z-index: 1; }
+
+  /* ── JSON viewer ── */
+  .json-wrap { padding: 14px 16px; }
+  pre.json-view { margin: 0; font-family: "SF Mono", ui-monospace, monospace;
+                  font-size: 11px; line-height: 1.65; white-space: pre-wrap;
+                  word-break: break-all; color: #a0aec0; }
+  .jk  { color: #63b3ed; }   /* key */
+  .js  { color: #68d391; }   /* string value */
+  .jn  { color: #f6ad55; }   /* number */
+  .jb  { color: #fc8181; }   /* boolean */
+  .jnl { color: #4a5568; }   /* null */
+
+  /* ── Right panel ── */
+  .panel-right { overflow-y: auto; display: flex; flex-direction: column; }
+  .report-header { padding: 10px 16px 10px 24px; font-size: 11px; font-weight: 700;
+                   color: #4a5568; text-transform: uppercase; letter-spacing: .8px;
+                   border-bottom: 1px solid #1e2435; flex-shrink: 0; background: #0f1117;
+                   display: flex; align-items: center; gap: 10px;
+                   position: sticky; top: 0; z-index: 1; }
+  .model-chip { font-size: 10px; background: #1a1f2e; color: #553c9a;
+                border: 1px solid #2d3748; border-radius: 4px; padding: 2px 8px;
+                font-weight: 600; text-transform: none; letter-spacing: 0; font-family: "SF Mono", monospace; }
+  .thinking-dot { width: 6px; height: 6px; border-radius: 50%; background: #9f7aea;
+                  animation: pulse 1s infinite; }
+  @keyframes pulse { 0%,100%{ opacity:1;transform:scale(1) } 50%{ opacity:.4;transform:scale(.7) } }
+
+  .report-body { flex: 1; padding: 24px 32px; }
+
+  /* ── Markdown ── */
+  .md h1 { font-size: 17px; color: #fff; margin: 0 0 16px; }
+  .md h2 { font-size: 14px; color: #e2e8f0; margin: 22px 0 10px;
+           padding-bottom: 6px; border-bottom: 1px solid #1e2435; }
+  .md h3 { font-size: 13px; color: #a0aec0; margin: 16px 0 8px; }
+  .md h4 { font-size: 12px; color: #718096; margin: 12px 0 6px; font-weight: 700; }
+  .md p  { line-height: 1.75; color: #cbd5e0; margin-bottom: 10px; }
+  .md ul, .md ol { padding-left: 20px; margin-bottom: 10px; }
+  .md li { line-height: 1.75; color: #cbd5e0; margin-bottom: 2px; }
+  .md strong { color: #e2e8f0; }
+  .md em { color: #a0aec0; }
+  .md code { font-family: "SF Mono", monospace; font-size: 11px;
+             background: #1a1f2e; padding: 1px 5px; border-radius: 3px; color: #9f7aea; }
+  .md pre { background: #0a0d14; border: 1px solid #1e2435; border-radius: 6px;
+            padding: 14px; margin: 12px 0; overflow-x: auto; }
+  .md pre code { background: none; padding: 0; color: #a0aec0; font-size: 11px; }
+  /* 表格 */
+  .md table { border-collapse: collapse; width: 100%; margin: 12px 0; font-size: 12px; }
+  .md th { background: #1a1f2e; color: #a0aec0; padding: 7px 12px;
+           text-align: left; border: 1px solid #2d3748; font-weight: 600; }
+  .md td { padding: 6px 12px; border: 1px solid #1e2435; color: #cbd5e0;
+           font-family: "SF Mono", monospace; font-size: 11px; }
+  .md tr:nth-child(even) td { background: #0a0d14; }
+
+  /* 光标 */
+  .cursor { display: inline-block; width: 2px; height: 13px; background: #9f7aea;
+            animation: blink .8s infinite; vertical-align: text-bottom; margin-left: 1px; }
+  @keyframes blink { 0%,100%{opacity:1} 50%{opacity:0} }
+
+  /* 空态 & 错误 */
+  .empty { display: flex; flex-direction: column; align-items: center;
+           justify-content: center; gap: 10px; color: #2d3748; padding: 60px 20px; text-align: center; }
+  .empty svg { width: 44px; height: 44px; opacity: .25; }
+  .empty p { font-size: 13px; }
+  .empty .sub { font-size: 11px; color: #1e2435; }
+  .err { background: #3a1a1a; border: 1px solid #742a2a; border-radius: 6px;
+         padding: 12px 16px; color: #fc8181; font-size: 13px; }
+
+  /* 滚动条 */
+  ::-webkit-scrollbar { width: 4px; height: 4px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: #2d3748; border-radius: 2px; }
+
+  /* mermaid */
+  .mermaid-svg { background: #0a0d14; border: 1px solid #1e2435; border-radius: 6px;
+                 padding: 16px; margin: 12px 0; overflow-x: auto; text-align: center; }
+  .mermaid-svg svg { max-width: 100%; height: auto; }
+</style>
+</head>
+<body>
+
+<!-- Header -->
+<header>
+  <span class="brand">MEV Report</span>
+  <span class="brand-sub">AI-powered analysis</span>
+</header>
+
+<!-- LLM Config -->
+<div class="config-bar">
+  <span class="config-label">LLM</span>
+
+  <div class="provider-tabs" id="providerTabs">
+    <button class="ptab active" data-p="claude"   onclick="selectProvider('claude')">Claude</button>
+    <button class="ptab"        data-p="gpt"      onclick="selectProvider('gpt')">GPT</button>
+    <button class="ptab"        data-p="gemini"   onclick="selectProvider('gemini')">Gemini</button>
+    <button class="ptab"        data-p="deepseek" onclick="selectProvider('deepseek')">DeepSeek</button>
+    <button class="ptab"        data-p="qwen"     onclick="selectProvider('qwen')">Qwen</button>
+  </div>
+
+  <div class="config-sep"></div>
+
+  <input class="cfg-input inp-key" id="cfgApiKey" type="password"
+         placeholder="API Key" autocomplete="off" spellcheck="false">
+
+  <input class="cfg-input inp-model" id="cfgModel" type="text"
+         placeholder="Model" autocomplete="off" spellcheck="false">
+</div>
+
+<!-- Query Bar -->
+<div class="query-bar">
+  <input class="inp-hash" id="txInput"
+         placeholder="Transaction hash  e.g. 0x97f15c..." autocomplete="off" spellcheck="false">
+  <button class="btn-run" id="runBtn" onclick="run()">Generate Report</button>
+</div>
+
+<div class="examples">
+  <span>e.g.</span>
+  <span class="ex-link" onclick="useEx(this)">0x97f15c243103b96f4b978ec8199b3a512d510c757d0058d1b9728f854367b490</span>
+</div>
+
+<!-- Main -->
+<main>
+  <!-- Left: MEV raw data -->
+  <div class="panel-left">
+    <div class="panel-title">MEV Data</div>
+    <div id="mevPanel">
+      <div class="empty"><p>Waiting for query…</p></div>
+    </div>
+  </div>
+
+  <!-- Right: AI report -->
+  <div class="panel-right">
+    <div class="report-header">
+      <span>AI Analysis Report</span>
+      <span class="model-chip" id="modelChip">—</span>
+      <div class="thinking-dot" id="thinkingDot" style="display:none"></div>
+    </div>
+    <div class="report-body">
+      <div id="reportPanel">
+        <div class="empty">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+            <path d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+          </svg>
+          <p>Enter a tx hash and click Generate Report</p>
+          <p class="sub">The AI will produce a structured analysis following the SKILL.md format:<br>Conclusion · Summary · Token Flow Chart · EigenTx (Mermaid)</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</main>
+
+<script src="https://cdn.jsdelivr.net/npm/marked@9/marked.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.min.js"></script>
+<script>
+mermaid.initialize({ startOnLoad: false, theme: "dark", securityLevel: "loose" });
+</script>
+<script>
+// ── Provider defaults (populated from /providers) ────────────────────────────
+let PROVIDERS = {};
+let _provider = "claude";
+let _running = false;
+let _md = "";
+
+async function loadProviders() {
+  try {
+    const r = await fetch("/providers");
+    PROVIDERS = await r.json();
+    applyProviderDefaults(_provider);
+  } catch(e) {
+    console.warn("failed to load providers", e);
+  }
+}
+
+function applyProviderDefaults(p) {
+  const d = PROVIDERS[p];
+  if (!d) return;
+  const modelEl = document.getElementById("cfgModel");
+  const prev = Object.values(PROVIDERS).find(x => x.model === modelEl.value);
+  if (!modelEl.value || prev) {
+    modelEl.value = d.model;
+  }
+}
+
+function selectProvider(p) {
+  _provider = p;
+  document.querySelectorAll(".ptab").forEach(t => t.classList.toggle("active", t.dataset.p === p));
+  applyProviderDefaults(p);
+  document.getElementById("modelChip").textContent = document.getElementById("cfgModel").value || "—";
+}
+
+// ── Helpers ───────────────────────────────────────────────────────────────────
+
+function useEx(el) { document.getElementById("txInput").value = el.textContent.trim(); }
+
+function esc(s) {
+  return String(s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");
+}
+
+function setLoading(on) {
+  _running = on;
+  document.getElementById("runBtn").disabled = on;
+  document.getElementById("runBtn").textContent = on ? "Analyzing…" : "Generate Report";
+  document.getElementById("thinkingDot").style.display = on ? "block" : "none";
+}
+
+function updateModelChip() {
+  const m = document.getElementById("cfgModel").value || "—";
+  document.getElementById("modelChip").textContent = m;
+}
+document.getElementById("cfgModel").addEventListener("input", updateModelChip);
+
+// ── Render MEV left panel ─────────────────────────────────────────────────────
+
+function jsonHighlight(obj) {
+  const raw = JSON.stringify(obj, null, 2);
+  return raw.replace(
+    /("(\\u[\da-fA-F]{4}|\\[^u]|[^\\"])*"(\s*:)?|\b(true|false|null)\b|-?\d+(?:\.\d*)?(?:[eE][+\-]?\d+)?)/g,
+    m => {
+      if (/^"/.test(m)) {
+        return /:$/.test(m)
+          ? `<span class="jk">${m}</span>`
+          : `<span class="js">${m}</span>`;
+      }
+      if (/true|false/.test(m)) return `<span class="jb">${m}</span>`;
+      if (/null/.test(m))       return `<span class="jnl">${m}</span>`;
+      return `<span class="jn">${m}</span>`;
+    }
+  );
+}
+
+function renderMev(d) {
+  document.getElementById("mevPanel").innerHTML =
+    `<div class="json-wrap"><pre class="json-view">${jsonHighlight(d)}</pre></div>`;
+}
+
+// ── Render report right panel ─────────────────────────────────────────────────
+
+marked.setOptions({ breaks: true, gfm: true });
+
+function renderReport(md, streaming) {
+  const html = marked.parse(md);
+  const panel = document.getElementById("reportPanel");
+  panel.innerHTML =
+    `<div class="md">${html}${streaming ? '<span class="cursor"></span>' : ''}</div>`;
+  if (!streaming) renderMermaid(panel);
+}
+
+async function renderMermaid(container) {
+  const blocks = container.querySelectorAll('pre code.language-mermaid');
+  for (const code of blocks) {
+    const def = code.textContent;
+    const id = "mermaid-" + Math.random().toString(36).slice(2);
+    try {
+      const { svg } = await mermaid.render(id, def);
+      const wrapper = document.createElement("div");
+      wrapper.className = "mermaid-svg";
+      wrapper.innerHTML = svg;
+      code.closest("pre").replaceWith(wrapper);
+    } catch(e) {
+      console.warn("mermaid render error", e);
+    }
+  }
+}
+
+function showErr(msg) {
+  document.getElementById("reportPanel").innerHTML = `<div class="err">Error: ${esc(msg)}</div>`;
+}
+
+// ── Main flow ─────────────────────────────────────────────────────────────────
+
+async function run() {
+  if (_running) return;
+
+  const txHash  = document.getElementById("txInput").value.trim();
+  const apiKey  = document.getElementById("cfgApiKey").value.trim();
+  const model   = document.getElementById("cfgModel").value.trim();
+
+  if (!txHash)  { alert("Please enter a transaction hash."); return; }
+  if (!apiKey)  { alert("Please enter your API key."); return; }
+  if (!_provider) { alert("Please select a provider."); return; }
+
+  setLoading(true);
+  _md = "";
+  updateModelChip();
+
+  document.getElementById("mevPanel").innerHTML =
+    `<div class="empty"><p>Loading MEV data…</p></div>`;
+  document.getElementById("reportPanel").innerHTML =
+    `<div class="empty"><p style="color:#553c9a">Waiting for AI…</p></div>`;
+
+  try {
+    const resp = await fetch("/report", {
+      method: "POST",
+      headers: {"Content-Type": "application/json"},
+      body: JSON.stringify({
+        tx_hash: txHash,
+        provider: _provider,
+        api_key: apiKey,
+        model: model,
+      }),
+    });
+
+    if (!resp.ok) {
+      const err = await resp.json().catch(() => ({error: resp.statusText}));
+      showErr(err.error || resp.statusText);
+      return;
+    }
+
+    const reader = resp.body.getReader();
+    const dec = new TextDecoder();
+    let buf = "";
+
+    while (true) {
+      const {done, value} = await reader.read();
+      if (done) break;
+      buf += dec.decode(value, {stream: true});
+      const parts = buf.split("\n\n");
+      buf = parts.pop();
+      for (const part of parts) {
+        if (!part.startsWith("data: ")) continue;
+        try { onEvent(JSON.parse(part.slice(6))); } catch {}
+      }
+    }
+    if (_md) renderReport(_md, false);
+
+  } catch(e) {
+    showErr(e.message || "Network error");
+  } finally {
+    setLoading(false);
+  }
+}
+
+function onEvent(evt) {
+  if (evt.type === "mev_data") {
+    renderMev(evt.data);
+    document.getElementById("reportPanel").innerHTML =
+      `<div class="md"><span class="cursor"></span></div>`;
+  } else if (evt.type === "delta") {
+    _md += evt.text;
+    renderReport(_md, true);
+    const p = document.querySelector(".panel-right");
+    p.scrollTop = p.scrollHeight;
+  } else if (evt.type === "done") {
+    renderReport(_md, false);
+  } else if (evt.type === "error") {
+    showErr(evt.message || "LLM error");
+  }
+}
+
+// Enter key
+document.getElementById("txInput").addEventListener("keydown", e => {
+  if (e.key === "Enter") run();
+});
+
+// Init
+loadProviders().then(() => updateModelChip());
+</script>
+</body>
+</html>
