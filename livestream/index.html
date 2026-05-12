@@ -488,7 +488,7 @@ function addSandwichRows(msg, data) {
       '<td class="mono">'  + addrChips(role, 'to')      + '</td>' +
       (i === 0
         ? '<td class="r mono ' + usdCls(profit)  + '" rowspan="3">' + fmtUsd(profit)  + '</td>'
-          + '<td class="r mono ' + usdCls(cost !== null ? -cost : null) + '" rowspan="3">' + fmtUsd(cost) + '</td>'
+          + '<td class="r mono ' + usdCls(cost !== null ? -cost : null) + '" rowspan="3">' + fmtUsd(cost, true) + '</td>'
           + '<td class="r mono ' + usdCls(revenue) + '" rowspan="3">' + fmtUsd(revenue) + '</td>'
         : '');
 
@@ -554,7 +554,7 @@ function addJitRows(msg, data) {
       '<td class="mono">' + addrChips(role, 'to')   + '</td>' +
       (i === 0
         ? '<td class="r mono ' + usdCls(profit)  + '" rowspan="3">' + fmtUsd(profit)  + '</td>'
-          + '<td class="r mono ' + usdCls(cost !== null ? -cost : null) + '" rowspan="3">' + fmtUsd(cost) + '</td>'
+          + '<td class="r mono ' + usdCls(cost !== null ? -cost : null) + '" rowspan="3">' + fmtUsd(cost, true) + '</td>'
           + '<td class="r mono ' + usdCls(revenue) + '" rowspan="3">' + fmtUsd(revenue) + '</td>'
         : '');
 
@@ -597,7 +597,7 @@ function addSimpleRow(msg, data, mevType) {
     td(addrLink(from), 'mono') +
     td(addrLink(to),   'mono') +
     tdr(fmtUsd(profit),  usdCls(profit)) +
-    tdr(fmtUsd(cost),    usdCls(cost !== null ? -cost : null)) +
+    tdr(fmtUsd(cost, true),    usdCls(cost !== null ? -cost : null)) +
     tdr(fmtUsd(revenue), usdCls(revenue));
 
   const insertBefore = _findInsertPos(blockNum, txIndex === '' ? -1 : +txIndex);
