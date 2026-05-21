@@ -31,7 +31,7 @@ Browser renders report (marked.js + mermaid.js)
 
 ```bash
 # 1. Enter the directory
-cd demo/mev-report
+cd mev-report
 
 # 2. Create and activate a virtual environment
 python3 -m venv .venv

@@ -19,7 +19,7 @@ View the MEV event stream in real time on your local machine, powered by the MEV
 
 ```bash
 # 1. Enter the directory
-cd demo/livestream
+cd livestream
 
 # 2. Create and activate a virtual environment
 python3 -m venv .venv
@@ -50,13 +50,13 @@ open http://localhost:5000      # macOS
 | `MEVSCAN_URL` | MEVScan server URL, e.g. `https://your-server.com` | **required** |
 | `MEVSCAN_TOKEN` | API Bearer token | **required** |
 | `LOCAL_HOST` | Local bind address | `127.0.0.1` |
-| `LOCAL_PORT` | Local bind port | `8080` |
+| `LOCAL_PORT` | Local bind port | `5000` |
 
 ## Architecture
 
 ```
 Browser (index.html)
-    ↕ WebSocket  ws://localhost:8080/ws
+    ↕ WebSocket  ws://localhost:5000/ws
 Python proxy (app.py)
     ↕ SSE + Bearer Token
 MEVScan server

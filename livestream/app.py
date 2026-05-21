@@ -9,7 +9,7 @@ Responsibilities:
 
 Usage:
   python app.py
-  Open http://localhost:8080 in your browser
+  Open http://localhost:5000 in your browser
 """
 
 from __future__ import annotations
@@ -40,7 +40,7 @@ logger = logging.getLogger(__name__)
 MEVSCAN_URL: str = os.environ.get("MEVSCAN_URL", "").rstrip("/")
 MEVSCAN_TOKEN: str = os.environ.get("MEVSCAN_TOKEN", "")
 LOCAL_HOST: str = os.environ.get("LOCAL_HOST", "127.0.0.1")
-LOCAL_PORT: int = int(os.environ.get("LOCAL_PORT", "8080"))
+LOCAL_PORT: int = int(os.environ.get("LOCAL_PORT", "5000"))
 
 if not MEVSCAN_URL or not MEVSCAN_TOKEN:
     print("Error: set MEVSCAN_URL and MEVSCAN_TOKEN in .env")

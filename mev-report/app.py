@@ -42,7 +42,7 @@ logger = logging.getLogger(__name__)
 MEVSCAN_DATA_URL: str = os.environ.get("MEVSCAN_URL", "").rstrip("/")
 MEVSCAN_DATA_API_KEY: str = os.environ.get("MEVSCAN_TOKEN", "")
 LOCAL_HOST: str = os.environ.get("LOCAL_HOST", "127.0.0.1")
-LOCAL_PORT: int = int(os.environ.get("LOCAL_PORT", "8081"))
+LOCAL_PORT: int = int(os.environ.get("LOCAL_PORT", "5001"))
 
 if not MEVSCAN_DATA_URL or not MEVSCAN_DATA_API_KEY:
     print("Error: set MEVSCAN_URL and MEVSCAN_TOKEN in .env")
