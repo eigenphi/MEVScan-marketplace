@@ -30,16 +30,27 @@ Browser renders report (marked.js + mermaid.js)
 ## Quick start
 
 ```bash
-# 1. Install dependencies
+# 1. Enter the directory
+cd demo/mev-report
+
+# 2. Create and activate a virtual environment
+python3 -m venv .venv
+source .venv/bin/activate      # macOS / Linux
+# .venv\Scripts\activate       # Windows
+
+# 3. Install dependencies
 pip install -r requirements.txt
 
-# 2. Configure environment
+# 4. Configure environment variables
 cp .env.example .env
-# Edit .env — set MEVSCAN_URL and MEVSCAN_TOKEN
+# Edit .env 
 
-# 3. Start the server
+# 5. Start the local proxy
 python app.py
-# → http://localhost:5001
+
+# 6. Open in browser
+open http://localhost:5001      # macOS
+# start http://localhost:5001   # Windows
 ```
 
 Open `http://localhost:5001` in your browser, enter a tx hash and your LLM API key, then click **Generate Report**.

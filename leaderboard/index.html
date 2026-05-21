@@ -1,0 +1,364 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MEV Leaderboard</title>
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+  body { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+         background: #0f1117; color: #e2e8f0; min-height: 100vh;
+         display: flex; flex-direction: column; font-size: 13px; }
+
+  /* ── Header ── */
+  header { background: #1a1f2e; border-bottom: 1px solid #2d3748;
+           padding: 0 24px; height: 48px; display: flex; align-items: center; gap: 14px; flex-shrink: 0; }
+  .brand { font-size: 15px; font-weight: 700; color: #fff; }
+  .brand-sub { font-size: 12px; color: #4a5568; }
+  .brand-badge { font-size: 10px; font-weight: 700; color: #fbbf24; background: #1a1500;
+                 border: 1px solid #d97706; border-radius: 4px; padding: 2px 7px;
+                 text-transform: uppercase; letter-spacing: .5px; }
+
+  /* ── Filter Bar ── */
+  .filter-bar { background: #13171f; border-bottom: 1px solid #1e2435;
+                padding: 10px 24px; display: flex; align-items: center; gap: 12px; flex-wrap: wrap; flex-shrink: 0; }
+  .filter-label { font-size: 11px; font-weight: 700; color: #4a5568;
+                  text-transform: uppercase; letter-spacing: .6px; white-space: nowrap; }
+  .filter-sep { width: 1px; height: 20px; background: #1e2435; flex-shrink: 0; }
+
+  /* tab group */
+  .tab-group { display: flex; gap: 3px; }
+  .tab { padding: 4px 12px; border-radius: 4px; font-size: 12px; font-weight: 600;
+         cursor: pointer; border: 1px solid #2d3748; color: #718096;
+         background: transparent; transition: all .12s; white-space: nowrap; }
+  .tab:hover { border-color: #4a5568; color: #a0aec0; }
+  .tab.active { border-color: #553c9a; color: #d6bcfa; background: #1a1230; }
+
+  /* time_range accent */
+  .tab-time.active  { border-color: #0ea5e9; color: #38bdf8; background: #00101a; }
+
+  /* mev_type accent */
+  .tab[data-type="arbitrage"].active  { border-color: #10b981; color: #34d399; background: #001a0f; }
+  .tab[data-type="sandwich"].active   { border-color: #f59e0b; color: #fbbf24; background: #1a1000; }
+  .tab[data-type="jit"].active        { border-color: #8b5cf6; color: #c4b5fd; background: #0d0a1a; }
+  .tab[data-type="liquidation"].active{ border-color: #ef4444; color: #fca5a5; background: #1a0505; }
+
+  /* sort accent */
+  .tab-sort.active  { border-color: #22d3ee; color: #67e8f9; background: #001518; }
+
+  .inp-bot { background: #1a1f2e; border: 1px solid #2d3748; border-radius: 4px;
+             color: #e2e8f0; padding: 4px 10px; font-size: 12px; font-family: "SF Mono", monospace;
+             outline: none; width: 220px; transition: border-color .15s; }
+  .inp-bot:focus { border-color: #553c9a; }
+  .inp-bot::placeholder { color: #2d3748; }
+
+  .inp-limit { background: #1a1f2e; border: 1px solid #2d3748; border-radius: 4px;
+               color: #e2e8f0; padding: 4px 8px; font-size: 12px; outline: none;
+               width: 70px; transition: border-color .15s; }
+  .inp-limit:focus { border-color: #553c9a; }
+
+  .btn-run { padding: 5px 20px; border-radius: 4px; font-size: 12px; font-weight: 700;
+             cursor: pointer; border: none; background: #553c9a; color: #fff;
+             transition: background .12s; white-space: nowrap; }
+  .btn-run:hover:not(:disabled) { background: #6b46c1; }
+  .btn-run:disabled { background: #2d3748; color: #4a5568; cursor: not-allowed; }
+
+  /* ── Status bar ── */
+  .status-bar { background: #0f1117; border-bottom: 1px solid #1e2435;
+                padding: 6px 24px; display: flex; align-items: center; gap: 10px; min-height: 30px; flex-shrink: 0; }
+  .status-text { font-size: 11px; color: #4a5568; }
+  .status-text.ok   { color: #10b981; }
+  .status-text.err  { color: #ef4444; }
+  .spinner { width: 12px; height: 12px; border: 2px solid #2d3748; border-top-color: #553c9a;
+             border-radius: 50%; animation: spin .7s linear infinite; flex-shrink: 0; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .meta-pill { font-size: 10px; color: #4a5568; background: #1a1f2e;
+               border: 1px solid #2d3748; border-radius: 10px; padding: 1px 8px; }
+
+  /* ── Table ── */
+  .table-wrap { flex: 1; overflow: auto; padding: 16px 24px; }
+  table { width: 100%; border-collapse: collapse; }
+  thead th { position: sticky; top: 0; z-index: 1;
+             background: #1a1f2e; border-bottom: 1px solid #2d3748;
+             padding: 8px 12px; text-align: left; font-size: 11px; font-weight: 700;
+             color: #718096; text-transform: uppercase; letter-spacing: .5px; white-space: nowrap; }
+  thead th.num { text-align: right; }
+  tbody tr { border-bottom: 1px solid #13171f; transition: background .1s; }
+  tbody tr:hover { background: #1a1f2e; }
+  td { padding: 7px 12px; font-size: 12px; color: #a0aec0; white-space: nowrap; }
+  td.num { text-align: right; font-family: "SF Mono", monospace; font-size: 11px; }
+  td.mono { font-family: "SF Mono", monospace; font-size: 11px; }
+  td.rank { color: #553c9a; font-weight: 700; font-size: 13px; width: 32px; }
+
+  .type-badge { display: inline-block; padding: 2px 7px; border-radius: 3px; font-size: 10px; font-weight: 700;
+                text-transform: uppercase; letter-spacing: .4px; }
+  .type-arbitrage  { background: #001a0f; color: #34d399; border: 1px solid #10b981; }
+  .type-sandwich   { background: #1a1000; color: #fbbf24; border: 1px solid #f59e0b; }
+  .type-jit        { background: #0d0a1a; color: #c4b5fd; border: 1px solid #8b5cf6; }
+  .type-liquidation{ background: #1a0505; color: #fca5a5; border: 1px solid #ef4444; }
+  .type-unknown    { background: #1a1f2e; color: #4a5568; border: 1px solid #2d3748; }
+
+  .profit-pos { color: #34d399; }
+  .profit-neg { color: #ef4444; }
+
+  .addr-link { color: #60a5fa; text-decoration: none; font-family: "SF Mono", monospace; font-size: 11px; }
+  .addr-link:hover { text-decoration: underline; }
+
+  .empty-state { text-align: center; padding: 60px 24px; color: #2d3748; }
+  .empty-icon { font-size: 36px; margin-bottom: 12px; }
+  .empty-text { font-size: 14px; }
+
+  /* ── Truncation notice ── */
+  .truncation-note { font-size: 11px; color: #f59e0b; background: #1a1000;
+                     border: 1px solid #f59e0b33; border-radius: 4px;
+                     padding: 4px 12px; margin-left: auto; }
+</style>
+</head>
+<body>
+
+<header>
+  <span class="brand">EigenPhi</span>
+  <span class="brand-sub">/</span>
+  <span class="brand">MEV Leaderboard</span>
+  <span class="brand-badge">via MCP</span>
+</header>
+
+<div class="filter-bar">
+  <!-- time_range -->
+  <span class="filter-label">Period</span>
+  <div class="tab-group" id="tabs-time">
+    <button class="tab tab-time active" data-val="1d">24h</button>
+    <button class="tab tab-time" data-val="7d">7d</button>
+  </div>
+
+  <div class="filter-sep"></div>
+
+  <!-- mev_type -->
+  <span class="filter-label">Type</span>
+  <div class="tab-group" id="tabs-type">
+    <button class="tab active" data-type="">All</button>
+    <button class="tab" data-type="arbitrage">Arbitrage</button>
+    <button class="tab" data-type="sandwich">Sandwich</button>
+    <button class="tab" data-type="jit">JIT</button>
+    <button class="tab" data-type="liquidation">Liquidation</button>
+  </div>
+
+  <div class="filter-sep"></div>
+
+  <!-- sort -->
+  <span class="filter-label">Sort</span>
+  <div class="tab-group" id="tabs-sort">
+    <button class="tab tab-sort active" data-val="profit">Profit</button>
+    <button class="tab tab-sort" data-val="revenue">Revenue</button>
+    <button class="tab tab-sort" data-val="cost">Cost</button>
+  </div>
+
+  <div class="filter-sep"></div>
+
+  <!-- bot filter -->
+  <span class="filter-label">Bot</span>
+  <input class="inp-bot" id="inp-bot" type="text" placeholder="0x... (optional)">
+
+  <div class="filter-sep"></div>
+
+  <!-- limit -->
+  <span class="filter-label">Limit</span>
+  <input class="inp-limit" id="inp-limit" type="number" min="1" max="100" value="20">
+
+  <button class="btn-run" id="btn-run">Fetch</button>
+</div>
+
+<div class="status-bar" id="status-bar">
+  <span class="status-text" id="status-text">Ready</span>
+</div>
+
+<div class="table-wrap">
+  <div class="empty-state" id="empty-state">
+    <div class="empty-icon">📊</div>
+    <div class="empty-text">Click Fetch to load the leaderboard</div>
+  </div>
+  <table id="table" style="display:none">
+    <thead>
+      <tr>
+        <th>#</th>
+        <th>MEV ID</th>
+        <th>Block</th>
+        <th>Type</th>
+        <th>From</th>
+        <th>To (Bot)</th>
+        <th class="num">Revenue</th>
+        <th class="num">Cost</th>
+        <th class="num">Profit</th>
+      </tr>
+    </thead>
+    <tbody id="tbody"></tbody>
+  </table>
+</div>
+
+<script>
+const $ = id => document.getElementById(id);
+
+// ── Tab helpers ──────────────────────────────────────────────────────────────
+
+function setupTabs(groupId, onChange) {
+  const grp = $(groupId);
+  grp.querySelectorAll('.tab').forEach(btn => {
+    btn.addEventListener('click', () => {
+      grp.querySelectorAll('.tab').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      if (onChange) onChange(btn.dataset.val ?? btn.dataset.type);
+    });
+  });
+}
+
+function getActive(groupId, attr) {
+  return document.querySelector(`#${groupId} .tab.active`)?.dataset[attr] ?? '';
+}
+
+setupTabs('tabs-time');
+setupTabs('tabs-type');
+setupTabs('tabs-sort');
+
+// ── Formatting ───────────────────────────────────────────────────────────────
+
+function fmtUsd(v) {
+  if (v == null) return '—';
+  const n = parseFloat(v);
+  if (Math.abs(n) >= 1e6) return '$' + (n / 1e6).toFixed(2) + 'M';
+  if (Math.abs(n) >= 1e3) return '$' + (n / 1e3).toFixed(2) + 'K';
+  return '$' + n.toFixed(2);
+}
+
+function fmtAddr(addr) {
+  if (!addr) return '—';
+  const short = addr.slice(0, 6) + '…' + addr.slice(-4);
+  return `<a class="addr-link" href="https://etherscan.io/address/${addr}" target="_blank" title="${addr}">${short}</a>`;
+}
+
+function fmtMevId(id) {
+  if (!id) return '—';
+  const short = id.slice(0, 8) + '…' + id.slice(-6);
+  return `<a class="addr-link" href="https://etherscan.io/tx/${id}" target="_blank" title="${id}">${short}</a>`;
+}
+
+function typeBadge(t) {
+  const cls = ['arbitrage','sandwich','jit','liquidation'].includes(t) ? `type-${t}` : 'type-unknown';
+  return `<span class="type-badge ${cls}">${t || '?'}</span>`;
+}
+
+function profitCell(v) {
+  const n = parseFloat(v ?? 0);
+  const cls = n >= 0 ? 'profit-pos' : 'profit-neg';
+  return `<span class="${cls}">${fmtUsd(v)}</span>`;
+}
+
+// ── Fetch ────────────────────────────────────────────────────────────────────
+
+async function loadLeaderboard() {
+  const btn = $('btn-run');
+  btn.disabled = true;
+
+  const timeRange = getActive('tabs-time', 'val') || '1d';
+  const mevType   = getActive('tabs-type', 'type');
+  const sort      = getActive('tabs-sort', 'val') || 'profit';
+  const bot       = $('inp-bot').value.trim();
+  const limit     = Math.min(100, Math.max(1, parseInt($('inp-limit').value) || 20));
+
+  setStatus('loading', 'Fetching leaderboard via MCP...');
+
+  const params = new URLSearchParams({ time_range: timeRange, sort, limit });
+  if (mevType) params.set('mev_type', mevType);
+  if (bot) params.set('bot', bot);
+
+  try {
+    const resp = await fetch(`/leaderboard?${params}`);
+    const payload = await resp.json();
+
+    if (!payload.ok) {
+      const msg = payload.error?.message || 'Unknown error';
+      setStatus('err', `Error: ${msg}`);
+      return;
+    }
+
+    const { items, total, truncated, query } = payload.data;
+    renderTable(items);
+
+    const latency = payload.meta?.latency_ms;
+    let statusMsg = `${total} result${total !== 1 ? 's' : ''}`;
+    if (latency != null) statusMsg += ` · ${latency}ms`;
+    setStatus('ok', statusMsg, truncated ? `Showing ${items.length} of ${total}` : null);
+
+  } catch (e) {
+    setStatus('err', `Network error: ${e.message}`);
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+function renderTable(items) {
+  const table = $('table');
+  const empty = $('empty-state');
+  const tbody = $('tbody');
+
+  if (!items || items.length === 0) {
+    table.style.display = 'none';
+    empty.style.display = '';
+    empty.innerHTML = '<div class="empty-icon">🔍</div><div class="empty-text">No results found</div>';
+    return;
+  }
+
+  tbody.innerHTML = '';
+  items.forEach((it, i) => {
+    const tr = document.createElement('tr');
+    tr.innerHTML = `
+      <td class="rank">${i + 1}</td>
+      <td class="mono">${fmtMevId(it.mev_id)}</td>
+      <td class="mono">${it.block_number?.toLocaleString() ?? '—'}</td>
+      <td>${typeBadge(it.mev_type)}</td>
+      <td>${fmtAddr(it.from_address)}</td>
+      <td>${fmtAddr(it.to_address)}</td>
+      <td class="num">${fmtUsd(it.revenue_usd)}</td>
+      <td class="num">${fmtUsd(it.cost_usd)}</td>
+      <td class="num">${profitCell(it.profit_usd)}</td>
+    `;
+    tbody.appendChild(tr);
+  });
+
+  table.style.display = '';
+  empty.style.display = 'none';
+}
+
+function setStatus(state, text, truncNote) {
+  const bar = $('status-bar');
+  const el  = $('status-text');
+
+  // remove old spinner/pill
+  bar.querySelectorAll('.spinner, .meta-pill, .truncation-note').forEach(n => n.remove());
+
+  el.className = 'status-text ' + (state === 'loading' ? '' : state);
+  el.textContent = text;
+
+  if (state === 'loading') {
+    const spin = document.createElement('div');
+    spin.className = 'spinner';
+    bar.insertBefore(spin, el);
+  }
+  if (truncNote) {
+    const pill = document.createElement('span');
+    pill.className = 'truncation-note';
+    pill.textContent = truncNote;
+    bar.appendChild(pill);
+  }
+}
+
+$('btn-run').addEventListener('click', loadLeaderboard);
+
+// Trigger query on Enter key
+$('inp-bot').addEventListener('keydown', e => { if (e.key === 'Enter') loadLeaderboard(); });
+$('inp-limit').addEventListener('keydown', e => { if (e.key === 'Enter') loadLeaderboard(); });
+
+// Initial load
+loadLeaderboard();
+</script>
+</body>
+</html>

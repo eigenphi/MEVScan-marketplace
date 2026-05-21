@@ -37,8 +37,8 @@ cp .env.example .env
 python app.py
 
 # 6. Open in browser
-open http://localhost:8080      # macOS
-# start http://localhost:8080   # Windows
+open http://localhost:5000      # macOS
+# start http://localhost:5000   # Windows
 ```
 
 > On subsequent runs you only need to re-activate the virtual environment (step 2); no need to reinstall dependencies.
