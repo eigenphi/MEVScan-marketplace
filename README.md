@@ -35,14 +35,14 @@ A local Python app that connects to the MEVScan SSE push service and displays re
 
 **Highlights**
 
-| Feature | Detail |
-|---------|--------|
-| Event types | Arbitrage, Sandwich, Liquidation, JIT |
-| Display | Newest 500 events, auto-updating table |
+| Feature | Detail                                       |
+|---------|----------------------------------------------|
+| Event types | Arbitrage, Sandwich, Liquidation, JIT        |
+| Display | Newest 500 events, auto-updating table       |
 | Controls | Pause / Resume (buffers events while paused) |
-| Filtering | Address filter for targeted monitoring |
-| Resilience | Auto-reconnect with exponential backoff |
-| Runtime | Python 3.10+ · `localhost:8080` |
+| Filtering | Address filter for targeted monitoring       |
+| Resilience | Auto-reconnect with exponential backoff      |
+| Runtime | Python 3.10+ · `localhost:5000`              |
 
 **How it works**
 
@@ -90,8 +90,37 @@ Browser renders report (marked.js + mermaid.js)
 
 ---
 
+### 3. [MEV Leaderboard](./leaderboard/)
+
+A local Python app that fetches and displays the MEV leaderboard via the MEVScan MCP API, showing top bots ranked by PnL.
+
+**Highlights**
+
+| Feature | Detail |
+|---------|--------|
+| Time ranges | 1d / 7d |
+| MEV types | Arbitrage, Sandwich, Liquidation, JIT |
+| Filters | Bot address, MEV type, sorting key |
+| Columns | Rank · MEV ID · Block · Type · Address (Etherscan link) · PnL (USD) |
+| Runtime | Python 3.10+ · `localhost:5002` |
+
+**How it works**
+
+```
+Browser → GET /leaderboard?... → app.py
+  → MCP SSE GET /sse          (create session)
+  → MCP POST /messages/       (initialize)
+  → MCP POST /messages/       (tools/call get_leaderboard)
+  ← SSE response JSON-RPC
+→ JSONResponse → Browser renders table
+```
+
+→ [Full documentation](./leaderboard/README.md)
+
+---
+
 ## Getting a MEVScan API Key
 
-Both apps above require a **MEVScan API key**. Visit [eigenphi.com](https://eigenphi.com/) and sign up to obtain one. You will also need to set the `MEVSCAN_URL` and `MEVSCAN_TOKEN` environment variables as described in each app's `.env.example`.
+All apps above require a **MEVScan API key**. Visit [eigenphi.com](https://eigenphi.com/) and sign up to obtain one. You will also need to set the `MEVSCAN_URL` and `MEVSCAN_TOKEN` environment variables as described in each app's `.env.example`.
 
 ---
