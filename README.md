@@ -48,7 +48,7 @@ A local Python app that connects to the MEVScan SSE push service and displays re
 
 ```
 Browser (index.html)
-    ↕ WebSocket  ws://localhost:8080/ws
+    ↕ WebSocket  ws://localhost:5000/ws
 Python proxy (app.py)
     ↕ SSE + Bearer Token
 MEVScan server
