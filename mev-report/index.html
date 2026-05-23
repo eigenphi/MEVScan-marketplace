@@ -152,13 +152,11 @@
 </head>
 <body>
 
-<!-- Header -->
 <header>
   <span class="brand">MEV Report</span>
   <span class="brand-sub">AI-powered analysis</span>
 </header>
 
-<!-- LLM Config -->
 <div class="config-bar">
   <span class="config-label">LLM</span>
 
@@ -179,7 +177,6 @@
          placeholder="Model" autocomplete="off" spellcheck="false">
 </div>
 
-<!-- Query Bar -->
 <div class="query-bar">
   <input class="inp-hash" id="txInput"
          placeholder="Transaction hash  e.g. 0x97f15c..." autocomplete="off" spellcheck="false">
@@ -191,9 +188,7 @@
   <span class="ex-link" onclick="useEx(this)">0x97f15c243103b96f4b978ec8199b3a512d510c757d0058d1b9728f854367b490</span>
 </div>
 
-<!-- Main -->
 <main>
-  <!-- Left: MEV raw data -->
   <div class="panel-left">
     <div class="panel-title">MEV Data</div>
     <div id="mevPanel">
@@ -201,7 +196,6 @@
     </div>
   </div>
 
-  <!-- Right: AI report -->
   <div class="panel-right">
     <div class="report-header">
       <span>AI Analysis Report</span>
@@ -224,8 +218,10 @@
 
 <script src="https://cdn.jsdelivr.net/npm/marked@9/marked.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/dompurify/3.0.6/purify.min.js" integrity="sha512-H+rglffZ6f5gF7UJgvH4Naa+fGCgjrHKMgoFOGmcPTRwR6oILo5R+gtzNrpDp7iMV3udbymBVjkeZGNz1Em4rQ==" crossorigin="anonymous"></script>
 <script>
-mermaid.initialize({ startOnLoad: false, theme: "dark", securityLevel: "loose" });
+// FIX: changed securityLevel from "loose" to "strict"
+mermaid.initialize({ startOnLoad: false, theme: "dark", securityLevel: "strict" });
 </script>
 <script>
 // ── Provider defaults (populated from /providers) ────────────────────────────
@@ -289,10 +285,12 @@ function jsonHighlight(obj) {
   return raw.replace(
     /("(\\u[\da-fA-F]{4}|\\[^u]|[^\\"])*"(\s*:)?|\b(true|false|null)\b|-?\d+(?:\.\d*)?(?:[eE][+\-]?\d+)?)/g,
     m => {
+      // FIX: escaping raw data before highlighting to prevent malicious code execution
+      const safeMatch = esc(m);
       if (/^"/.test(m)) {
         return /:$/.test(m)
-          ? `<span class="jk">${m}</span>`
-          : `<span class="js">${m}</span>`;
+          ? `<span class="jk">${safeMatch}</span>`
+          : `<span class="js">${safeMatch}</span>`;
       }
       if (/true|false/.test(m)) return `<span class="jb">${m}</span>`;
       if (/null/.test(m))       return `<span class="jnl">${m}</span>`;
@@ -311,11 +309,20 @@ function renderMev(d) {
 marked.setOptions({ breaks: true, gfm: true });
 
 function renderReport(md, streaming) {
-  const html = marked.parse(md);
-  const panel = document.getElementById("reportPanel");
-  panel.innerHTML =
-    `<div class="md">${html}${streaming ? '<span class="cursor"></span>' : ''}</div>`;
-  if (!streaming) renderMermaid(panel);
+    const rawHtml = marked.parse(md);
+    
+    // FIX: Fallback if DOMPurify fails to load from CDN
+    let cleanHtml = "";
+    if (window.DOMPurify) {
+        cleanHtml = window.DOMPurify.sanitize(rawHtml);
+    } else {
+        cleanHtml = "<div style='color: #ff4444; padding: 10px; border: 1px solid #ff4444;'>[Security Error] DOMPurify module failed to load. Content blocked to prevent XSS.</div>";
+    }
+
+    const panel = document.getElementById("reportPanel");
+    panel.innerHTML = `<div class="md">${cleanHtml}${streaming ? '<span class="cursor"></span>' : ''}</div>`;
+    
+    if (!streaming) renderMermaid(panel);
 }
 
 async function renderMermaid(container) {
