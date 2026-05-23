@@ -220,7 +220,7 @@
 <script src="https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/dompurify/3.0.6/purify.min.js"></script>
 <script>
-// FIX: securityLevel изменен с "loose" на "strict"
+// FIX: changed securityLevel from "loose" to "strict"
 mermaid.initialize({ startOnLoad: false, theme: "dark", securityLevel: "strict" });
 </script>
 <script>
@@ -285,7 +285,7 @@ function jsonHighlight(obj) {
   return raw.replace(
     /("(\\u[\da-fA-F]{4}|\\[^u]|[^\\"])*"(\s*:)?|\b(true|false|null)\b|-?\d+(?:\.\d*)?(?:[eE][+\-]?\d+)?)/g,
     m => {
-      // FIX: Экранируем сырые данные перед подсветкой, чтобы вредоносный код не исполнился
+      // FIX: escaping raw data before highlighting to prevent malicious code execution
       const safeMatch = esc(m);
       if (/^"/.test(m)) {
         return /:$/.test(m)
@@ -309,7 +309,7 @@ function renderMev(d) {
 marked.setOptions({ breaks: true, gfm: true });
 
 function renderReport(md, streaming) {
-  // FIX: Добавлена очистка сырого HTML через DOMPurify перед вставкой в innerHTML
+  // FIX: added sanitization of raw HTML via DOMPurify before inserting into innerHTML
   const rawHtml = marked.parse(md);
   const cleanHtml = DOMPurify.sanitize(rawHtml);
   const panel = document.getElementById("reportPanel");
