@@ -218,7 +218,7 @@
 
 <script src="https://cdn.jsdelivr.net/npm/marked@9/marked.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.min.js"></script>
-<script src="https://cdnjs.cloudflare.com/ajax/libs/dompurify/3.0.6/purify.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/dompurify/3.0.6/purify.min.js" integrity="sha512-H9BQZ4jeRyOwqyD3sCG50051Zz9O/0R7Zu05nd/y58S3pfCwIlWQ8A0ApH0A12mE/hR9Kq2xzaGkG7h8H9sLvw==" crossorigin="anonymous" referrerpolicy="no-referrer"></script>
 <script>
 // FIX: changed securityLevel from "loose" to "strict"
 mermaid.initialize({ startOnLoad: false, theme: "dark", securityLevel: "strict" });
@@ -309,13 +309,20 @@ function renderMev(d) {
 marked.setOptions({ breaks: true, gfm: true });
 
 function renderReport(md, streaming) {
-  // FIX: added sanitization of raw HTML via DOMPurify before inserting into innerHTML
-  const rawHtml = marked.parse(md);
-  const cleanHtml = DOMPurify.sanitize(rawHtml);
-  const panel = document.getElementById("reportPanel");
-  panel.innerHTML =
-    `<div class="md">${cleanHtml}${streaming ? '<span class="cursor"></span>' : ''}</div>`;
-  if (!streaming) renderMermaid(panel);
+    const rawHtml = marked.parse(md);
+    
+    // FIX: Fallback if DOMPurify fails to load from CDN
+    let cleanHtml = "";
+    if (window.DOMPurify) {
+        cleanHtml = window.DOMPurify.sanitize(rawHtml);
+    } else {
+        cleanHtml = "<div style='color: #ff4444; padding: 10px; border: 1px solid #ff4444;'>[Security Error] DOMPurify module failed to load. Content blocked to prevent XSS.</div>";
+    }
+
+    const panel = document.getElementById("reportPanel");
+    panel.innerHTML = `<div class="md">${cleanHtml}${streaming ? '<span class="cursor"></span>' : ''}</div>`;
+    
+    if (!streaming) renderMermaid(panel);
 }
 
 async function renderMermaid(container) {
