@@ -311,8 +311,13 @@ function renderMev(d) {
 marked.setOptions({ breaks: true, gfm: true });
 
 function renderReport(md, streaming) {
-  const html = marked.parse(md);
+  const rawHtml = marked.parse(md);
   const panel = document.getElementById("reportPanel");
+  if (!window.DOMPurify) {
+    panel.innerHTML = `<div class="err">Error: DOMPurify failed to load. Report rendering is blocked for safety.</div>`;
+    return;
+  }
+  const html = window.DOMPurify.sanitize(rawHtml);
   panel.innerHTML =
     `<div class="md">${html}${streaming ? '<span class="cursor"></span>' : ''}</div>`;
   if (!streaming) renderMermaid(panel);
