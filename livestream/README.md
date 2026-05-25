@@ -63,3 +63,16 @@ MEVScan server
 ```
 
 The Python proxy holds the API token, subscribes to the upstream SSE stream, and broadcasts events to all local WebSocket clients. The browser communicates only with `localhost`, so there are no CORS issues.
+
+## Stream Field Compatibility
+
+The proxy forwards the raw MEVScan event fields and also adds documented aliases when they are missing:
+
+| Upstream field | Added alias | Notes |
+|----------------|-------------|-------|
+| SSE `id:` line | `seq` | Used for `Last-Event-ID` resume after reconnects. |
+| `id` | `event_id` | Preserves the upstream `id` field. |
+| `type` | `mev_type` | Values include `arbitrage`, `sandwich`, `liquidation`, and `jit`. |
+| `txCount` | `tx_count` | Preserves the upstream camelCase field. |
+
+This keeps the demo compatible with both the current live payload shape and the Stream API documentation examples.
