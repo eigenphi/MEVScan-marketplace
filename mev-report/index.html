@@ -44,6 +44,7 @@
   .cfg-input::placeholder { color: #2d3748; }
   .inp-key   { width: 260px; font-family: "SF Mono", monospace; }
   .inp-model { width: 180px; font-family: "SF Mono", monospace; }
+  .inp-base  { width: 320px; font-family: "SF Mono", monospace; }
 
   /* ── Query Bar ── */
   .query-bar { background: #0f1117; border-bottom: 1px solid #1e2435;
@@ -175,6 +176,9 @@
 
   <input class="cfg-input inp-model" id="cfgModel" type="text"
          placeholder="Model" autocomplete="off" spellcheck="false">
+
+  <input class="cfg-input inp-base" id="cfgBaseUrl" type="url"
+         placeholder="API base URL" autocomplete="off" spellcheck="false">
 </div>
 
 <div class="query-bar">
@@ -247,6 +251,11 @@ function applyProviderDefaults(p) {
   const prev = Object.values(PROVIDERS).find(x => x.model === modelEl.value);
   if (!modelEl.value || prev) {
     modelEl.value = d.model;
+  }
+  const baseEl = document.getElementById("cfgBaseUrl");
+  const prevBase = Object.values(PROVIDERS).find(x => x.base_url === baseEl.value);
+  if (!baseEl.value || prevBase) {
+    baseEl.value = d.base_url;
   }
 }
 
@@ -354,6 +363,7 @@ async function run() {
   const txHash  = document.getElementById("txInput").value.trim();
   const apiKey  = document.getElementById("cfgApiKey").value.trim();
   const model   = document.getElementById("cfgModel").value.trim();
+  const baseUrl = document.getElementById("cfgBaseUrl").value.trim();
 
   if (!txHash)  { alert("Please enter a transaction hash."); return; }
   if (!apiKey)  { alert("Please enter your API key."); return; }
@@ -377,6 +387,7 @@ async function run() {
         provider: _provider,
         api_key: apiKey,
         model: model,
+        base_url: baseUrl,
       }),
     });
 

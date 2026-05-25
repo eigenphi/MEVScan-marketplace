@@ -20,7 +20,7 @@ If the result has `ok: false` or `error`, report the error and stop.
 
 ### 3. Build the report
 
-Output the report in **markdown format**. The report has four sections in this order: **Conclusion**, **Facts** (Summary + Token Flow Chart), and **EigenTx** (Mermaid).
+Output the report in **markdown format**. The report has three sections in this order: **Conclusion**, **Facts** (Summary + Token Flow Chart), and **EigenTx** (Mermaid).
 
 #### 3.1 Conclusion
 
@@ -40,19 +40,19 @@ Extract from the response `data`:
 | Field | Source |
 |-------|--------|
 | MEV Type | `data.type` (uppercase) |
-| Block Number | `data.block_number` |
-| Block Timestamp | `data.block_timestamp` (convert to UTC datetime) |
+| Block Number | `data.blockNumber` |
+| Block Timestamp | `data.blockTimestamp` (convert to UTC datetime) |
 | Tx Hash | `data.id` |
-| Tx Index | `data.mev_tx_relation.primary[0].txIndex` |
-| From | `data.mev_tx_relation.primary[0].from` |
-| To | `data.mev_tx_relation.primary[0].to` |
+| Tx Index | `data.mevTxRelation.primary[0].txIndex` |
+| From | `data.mevTxRelation.primary[0].from` |
+| To | `data.mevTxRelation.primary[0].to` |
 | Revenue | `data.pnl.summary.revenueUsd` (format as USD) |
 | Cost | `data.pnl.summary.costUsd` (format as USD) |
 | Profit | `data.pnl.summary.profitUsd` (format as USD) |
 
 ##### 3.2.2 Token Flow Chart
 
-Compute per-address balance changes from `data.mev_tx_relation.primary[0].transfers`:
+Compute per-address balance changes from `data.mevTxRelation.primary[0].transfers`:
 
 1. For each transfer, group by `(address, tokenId)`:
    - `from` address: subtract `amount`
@@ -61,7 +61,7 @@ Compute per-address balance changes from `data.mev_tx_relation.primary[0].transf
 3. Convert amounts using token decimals (ETH/WETH: 18 decimals, USDC/USDT: 6 decimals, default: 18 decimals).
 
 Tag each address with roles:
-- **Searcher**: if address is in `data.mev_tx_relation.primary[0].summary.searchers[]`
+- **Searcher**: if address is in `data.mevTxRelation.primary[0].summary.searchers[]`
 - **Miner/Builder**: if address is the `to` of a transfer from searcher and is the last transfer (typically builder tip)
 - **Pool**: if address appears as `poolId` (or first part of `poolId` before `|`) in any action. Include protocol name, e.g. `Pool(UniV3)`
 
@@ -82,7 +82,7 @@ Display as a **pivot table** where columns are tokens and rows are addresses (wi
 
 ##### 3.2.3 EigenTx
 
-Generate a Mermaid `graph LR` diagram from `data.mev_tx_relation.primary[0].transfers` to visualize the token flow.
+Generate a Mermaid `graph LR` diagram from `data.mevTxRelation.primary[0].transfers` to visualize the token flow.
 
 **Construction rules:**
 
@@ -212,6 +212,6 @@ After displaying the report, automatically write the full markdown content to a 
 
 ### 8. Edge cases
 
-- If `mev_tx_relation` has `frontrun`/`backrun`/`victim` keys (sandwich type), process each sub-relation separately and label them in the report.
+- If `mevTxRelation` has `frontrun`/`backrun`/`victim` keys (sandwich type), process each sub-relation separately and label them in the report.
 - If no transfers found, note "No transfers recorded for this event."
 - Addresses and tx hashes must be displayed in FULL — never abbreviate.

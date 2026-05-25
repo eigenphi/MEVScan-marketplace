@@ -2,7 +2,7 @@
 MEV Report Demo — generate AI-powered analysis reports for MEV transactions.
 
 Flow:
-  1. Browser submits tx_hash + LLM config (provider/api_key/model)
+  1. Browser submits tx_hash + LLM config (provider/api_key/model/base_url)
   2. Fetch MEV detail from MEVScan via MCP SSE protocol
   3. Build prompt following SKILL.md format
   4. Stream LLM response back to browser via SSE
