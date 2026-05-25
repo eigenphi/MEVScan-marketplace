@@ -74,7 +74,7 @@ Open `http://localhost:5001` in your browser, enter a tx hash and your LLM API k
 | `deepseek`| deepseek-chat        | https://api.deepseek.com                                        |
 | `qwen`    | qwen-plus            | https://dashscope.aliyuncs.com/compatible-mode/v1               |
 
-You can override the model name and base URL in the browser UI.
+The browser UI pre-fills the default model and API base URL for the selected provider; you can override either field before generating a report.
 
 ## Report format
 
