@@ -224,26 +224,44 @@ setupTabs('tabs-sort');
 function fmtUsd(v) {
   if (v == null) return '—';
   const n = parseFloat(v);
+  if (!Number.isFinite(n)) return '—';
   if (Math.abs(n) >= 1e6) return '$' + (n / 1e6).toFixed(2) + 'M';
   if (Math.abs(n) >= 1e3) return '$' + (n / 1e3).toFixed(2) + 'K';
   return '$' + n.toFixed(2);
 }
 
+function esc(s) {
+  return String(s ?? '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
+function fmtBlock(v) {
+  if (v == null || v === '') return '—';
+  const n = Number(v);
+  return Number.isFinite(n) ? n.toLocaleString() : esc(v);
+}
+
 function fmtAddr(addr) {
   if (!addr) return '—';
-  const short = addr.slice(0, 6) + '…' + addr.slice(-4);
-  return `<a class="addr-link" href="https://etherscan.io/address/${addr}" target="_blank" title="${addr}">${short}</a>`;
+  const value = String(addr);
+  const short = value.slice(0, 6) + '…' + value.slice(-4);
+  return `<a class="addr-link" href="https://etherscan.io/address/${encodeURIComponent(value)}" target="_blank" rel="noopener" title="${esc(value)}">${esc(short)}</a>`;
 }
 
 function fmtMevId(id) {
   if (!id) return '—';
-  const short = id.slice(0, 8) + '…' + id.slice(-6);
-  return `<a class="addr-link" href="https://etherscan.io/tx/${id}" target="_blank" title="${id}">${short}</a>`;
+  const value = String(id);
+  const short = value.slice(0, 8) + '…' + value.slice(-6);
+  return `<a class="addr-link" href="https://etherscan.io/tx/${encodeURIComponent(value)}" target="_blank" rel="noopener" title="${esc(value)}">${esc(short)}</a>`;
 }
 
 function typeBadge(t) {
   const cls = ['arbitrage','sandwich','jit','liquidation'].includes(t) ? `type-${t}` : 'type-unknown';
-  return `<span class="type-badge ${cls}">${t || '?'}</span>`;
+  return `<span class="type-badge ${cls}">${esc(t || '?')}</span>`;
 }
 
 function profitCell(v) {
@@ -313,7 +331,7 @@ function renderTable(items) {
     tr.innerHTML = `
       <td class="rank">${i + 1}</td>
       <td class="mono">${fmtMevId(it.mev_id)}</td>
-      <td class="mono">${it.block_number?.toLocaleString() ?? '—'}</td>
+      <td class="mono">${fmtBlock(it.block_number)}</td>
       <td>${typeBadge(it.mev_type)}</td>
       <td>${fmtAddr(it.from_address)}</td>
       <td>${fmtAddr(it.to_address)}</td>
