@@ -52,6 +52,29 @@ _clients: set[WebSocket] = set()
 _clients_lock = asyncio.Lock()
 
 
+def _normalize_mev_payload(payload: dict, sse_id: int) -> dict:
+    """
+    Keep current upstream fields while adding the documented stream aliases.
+
+    The live SSE API currently sends JSON fields such as `id`, `type`, and
+    `txCount`, while the Stream API docs describe `seq`, `event_id`,
+    `mev_type`, and `tx_count`. Broadcasting both forms lets this demo and
+    downstream clients tolerate either shape.
+    """
+    normalized = dict(payload)
+
+    if "seq" not in normalized and sse_id:
+        normalized["seq"] = sse_id
+    if "event_id" not in normalized and normalized.get("id") is not None:
+        normalized["event_id"] = normalized["id"]
+    if "mev_type" not in normalized and normalized.get("type") is not None:
+        normalized["mev_type"] = normalized["type"]
+    if "tx_count" not in normalized and normalized.get("txCount") is not None:
+        normalized["tx_count"] = normalized["txCount"]
+
+    return normalized
+
+
 async def broadcast(data: dict) -> None:
     """Broadcast one event to all connected browser WebSocket clients."""
     msg = json.dumps(data, ensure_ascii=False)
@@ -119,7 +142,8 @@ async def _subscribe_once(sub_id: str, sse_url: str, last_seq: int) -> int:
                         elif event_type in ("mev", "message", ""):
                             try:
                                 payload = json.loads(data_str)
-                                await broadcast({"_type": "mev", **payload})
+                                normalized = _normalize_mev_payload(payload, last_seq)
+                                await broadcast({"_type": "mev", **normalized})
                             except Exception as e:
                                 logger.debug("JSON parse error: %s", e)
                     cur_event = ""

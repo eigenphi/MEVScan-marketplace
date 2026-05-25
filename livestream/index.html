@@ -347,7 +347,7 @@ function addRow(msg) {
 
   if (!_msgMatchesFilter(msg)) return;
 
-  const mevType = (msg.type || '').toUpperCase();
+  const mevType = (msg.mev_type || msg.type || '').toUpperCase();
   const data    = msg.data || {};
 
   if (mevType === 'SANDWICH' || mevType === 'JIT') {
